@@ -15,7 +15,7 @@
  * - Phone number formatting
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,26 +23,41 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { PhoneInput } from './PhoneInput';
 import { BikeSelector } from './BikeSelector';
-import type { Client } from '../../types';
+import type { Client, Bike } from '../../types';
+import { collection, getDocs, query, updateDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 interface Props {
-  initialData?: Partial<Client>;
+  initialData?: Client;
   onSubmit: (data: Client) => void;
 }
 
 export function ClientForm({ initialData = {}, onSubmit }: Props) {
   const [formData, setFormData] = useState<Partial<Client>>({
     name: '',
-    mobile: '',
+    phone: '',
     email: '',
     bikeSerialNumbers: [],
     ...initialData,
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof Client, string>>>({});
+  const [allBikes, setAllBikes] = useState<Bike[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [formValid, setFormValid] = useState(true);
+
+  useEffect(() => {
+    const fetchBikes = async () => {
+      const q = query(collection(db, 'bikes'));
+      const snapshot = await getDocs(q);
+      setAllBikes(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Bike)));
+    };
+    fetchBikes();
+  }, []);
 
   const validateEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -54,21 +69,46 @@ export function ClientForm({ initialData = {}, onSubmit }: Props) {
     if (!formData.name) {
       newErrors.name = 'Name is required';
     }
-    if (!formData.mobile) {
-      newErrors.mobile = 'Mobile number is required';
+    if (!formData.phone) {
+      newErrors.phone = 'Mobile number is required';
     }
     if (formData.email && !validateEmail(formData.email)) {
       newErrors.email = 'Invalid email address';
     }
 
     setErrors(newErrors);
+    setFormValid(Object.keys(newErrors).length === 0);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
-    if (validate()) {
-      onSubmit(formData as Client);
+  const handleSubmit = async () => {
+    // Prevent double submission
+    if (loading) return;
+    
+    const isValid = validate();
+    if (!isValid) return;
+
+    setLoading(true);
+    try {
+      const clientData = {
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        bikeSerialNumbers: formData.bikeSerialNumbers,
+      };
+      await onSubmit(clientData as Client);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const toggleBike = (serialNumber: string) => {
+    setFormData(prev => ({
+      ...prev,
+      bikeSerialNumbers: prev.bikeSerialNumbers?.includes(serialNumber)
+        ? prev.bikeSerialNumbers.filter(sn => sn !== serialNumber)
+        : [...(prev.bikeSerialNumbers || []), serialNumber],
+    }));
   };
 
   return (
@@ -89,9 +129,9 @@ export function ClientForm({ initialData = {}, onSubmit }: Props) {
       </View>
 
       <PhoneInput
-        value={formData.mobile}
-        onChange={(mobile) => setFormData((prev) => ({ ...prev, mobile }))}
-        error={errors.mobile}
+        value={formData.phone}
+        onChange={(phone) => setFormData((prev) => ({ ...prev, phone }))}
+        error={errors.phone}
       />
 
       <View style={styles.field}>
@@ -111,18 +151,34 @@ export function ClientForm({ initialData = {}, onSubmit }: Props) {
         )}
       </View>
 
-      <BikeSelector
-        selectedBikes={formData.bikeSerialNumbers}
-        onChange={(bikes) =>
-          setFormData((prev) => ({ ...prev, bikeSerialNumbers: bikes }))
-        }
-      />
+      <Text style={styles.sectionTitle}>Associated Bikes:</Text>
+      <View style={styles.bikeList}>
+        {allBikes.map(bike => (
+          <Pressable
+            key={bike.id}
+            style={[
+              styles.bikeItem,
+              formData.bikeSerialNumbers.includes(bike.serialNumber) && styles.selectedBike
+            ]}
+            onPress={() => toggleBike(bike.serialNumber)}
+          >
+            <Text style={styles.bikeText}>
+              {bike.brand} {bike.model} ({bike.serialNumber})
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
       <Pressable
-        style={styles.submitButton}
+        style={[styles.submitButton, (loading || !formValid) && styles.disabled]}
         onPress={handleSubmit}
+        disabled={loading || !formValid}
       >
-        <Text style={styles.submitButtonText}>Save Client</Text>
+        {loading ? (
+          <ActivityIndicator color="#ffffff" />
+        ) : (
+          <Text style={styles.submitButtonText}>Save Client</Text>
+        )}
       </Pressable>
     </ScrollView>
   );
@@ -171,5 +227,36 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginVertical: 8,
+    color: '#1e293b',
+  },
+  bikeList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  bikeItem: {
+    padding: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  selectedBike: {
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff',
+  },
+  bikeText: {
+    fontSize: 14,
+    color: '#1e293b',
+  },
+  disabled: {
+    opacity: 0.6,
+    backgroundColor: '#94a3b8',
   },
 });

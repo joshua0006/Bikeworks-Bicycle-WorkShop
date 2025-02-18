@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientList } from '../../components/clients/ClientList';
@@ -15,7 +15,7 @@ export default function ClientsScreen() {
           </Pressable>
         </Link>
       </View>
-      <ClientList clients={[]} />
+      <ClientList />
     </View>
   );
 }

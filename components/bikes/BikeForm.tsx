@@ -23,6 +23,7 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { SerialLookup } from './SerialLookup';
 import { PhotoUpload } from '../sales/PhotoUpload';
@@ -50,6 +51,7 @@ export function BikeForm({ initialData = {}, onSubmit }: Props) {
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof Bike, string>>>({});
+  const [loading, setLoading] = useState(false);
 
   const validate = (): boolean => {
     const newErrors: Partial<Record<keyof Bike, string>> = {};
@@ -71,9 +73,17 @@ export function BikeForm({ initialData = {}, onSubmit }: Props) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
-    if (validate()) {
-      onSubmit(formData as Bike);
+  const handleSubmit = async () => {
+    if (loading) return;
+    
+    const isValid = validate();
+    if (!isValid) return;
+
+    setLoading(true);
+    try {
+      await onSubmit(formData as Bike);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -216,10 +226,17 @@ export function BikeForm({ initialData = {}, onSubmit }: Props) {
       </View>
 
       <Pressable
-        style={styles.submitButton}
+        style={[styles.submitButton, loading && styles.disabled]}
         onPress={handleSubmit}
+        disabled={loading}
       >
-        <Text style={styles.submitButtonText}>Save Bike</Text>
+        {loading ? (
+          <ActivityIndicator color="#ffffff" />
+        ) : (
+          <Text style={styles.submitButtonText}>
+            {initialData?.id ? 'Update Bike' : 'Save Bike'}
+          </Text>
+        )}
       </Pressable>
     </ScrollView>
   );
@@ -268,5 +285,9 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  disabled: {
+    opacity: 0.6,
+    backgroundColor: '#94a3b8',
   },
 });

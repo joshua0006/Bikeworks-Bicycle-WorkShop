@@ -18,16 +18,35 @@
 import { View, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { ClientForm } from '../../components/clients/ClientForm';
+import { addDoc, collection, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 import type { Client } from '../../types';
 
 export default function NewClientScreen() {
-  const handleSubmit = async (clientData: Client) => {
+  const handleSubmit = async (clientData: Omit<Client, 'id'>) => {
     try {
-      // TODO: Implement Firebase storage
-      // await saveClient(clientData);
+      // Add client to Firestore
+      const docRef = await addDoc(collection(db, 'clients'), clientData);
+      
+      // Update bikes with client reference
+      await Promise.all(
+        clientData.bikeSerialNumbers?.map(async serialNumber => {
+          const bikeRef = doc(db, 'bikes', serialNumber);
+          const bikeSnap = await getDoc(bikeRef);
+          
+          if (bikeSnap.exists()) {
+            await updateDoc(bikeRef, {
+              clientId: docRef.id,
+              clientName: clientData.name
+            });
+          }
+        }) || []
+      );
+      
       router.replace('/clients');
     } catch (error) {
       console.error('Failed to save client:', error);
+      alert('Failed to save client. Please try again.');
     }
   };
 
