@@ -35,7 +35,19 @@ export default function BikesScreen() {
     addButtonText: {
       color: '#ffffff',
       fontWeight: '600'
-    }
+    },
+    emptyState: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
+      gap: 12,
+    },
+    emptyStateText: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: '#64748b',
+    },
   });
 
   return (
@@ -49,7 +61,7 @@ export default function BikesScreen() {
           </Pressable>
         </Link>
       </View>
-      <BikeList bikes={[]} />
+      <BikeList />
     </View>
   );
 }

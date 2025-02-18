@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider } from '../context/ThemeContext';
+import '../lib/firebase';
 
 declare global {
   interface Window {

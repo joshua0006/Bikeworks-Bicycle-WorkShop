@@ -23,6 +23,7 @@ import {
   Image,
   ScrollView,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,9 +36,13 @@ interface Props {
 export function PhotoUpload({ photos: initialPhotos = [], onSubmit }: Props) {
   const [photos, setPhotos] = useState<string[]>(initialPhotos);
   const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
 
   const takePhoto = async () => {
+    if (processing) return;
+    
     try {
+      setProcessing(true);
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.8,
@@ -46,24 +51,22 @@ export function PhotoUpload({ photos: initialPhotos = [], onSubmit }: Props) {
       });
 
       if (!result.canceled) {
-        setPhotos((prev) => [...prev, result.assets[0].uri]);
+        const newPhotos = [...photos, result.assets[0].uri];
+        setPhotos(newPhotos);
+        onSubmit(newPhotos);
         setError(null);
       }
     } catch (err) {
       setError('Failed to take photo. Please try again.');
+    } finally {
+      setProcessing(false);
     }
   };
 
   const removePhoto = (index: number) => {
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSubmit = () => {
-    if (photos.length === 0) {
-      setError('Please take at least one photo');
-      return;
-    }
-    onSubmit(photos);
+    const newPhotos = photos.filter((_, i) => i !== index);
+    setPhotos(newPhotos);
+    onSubmit(newPhotos);
   };
 
   return (
@@ -79,26 +82,30 @@ export function PhotoUpload({ photos: initialPhotos = [], onSubmit }: Props) {
             <Pressable
               style={styles.removeButton}
               onPress={() => removePhoto(index)}
+              disabled={processing}
             >
               <Ionicons name="close-circle" size={24} color="#ef4444" />
             </Pressable>
           </View>
         ))}
         
-        <Pressable style={styles.addButton} onPress={takePhoto}>
-          <Ionicons name="camera" size={32} color="#64748b" />
-          <Text style={styles.addButtonText}>Take Photo</Text>
+        <Pressable 
+          style={[styles.addButton, processing && styles.disabledButton]} 
+          onPress={takePhoto}
+          disabled={processing}
+        >
+          {processing ? (
+            <ActivityIndicator color="#64748b" />
+          ) : (
+            <>
+              <Ionicons name="camera" size={32} color="#64748b" />
+              <Text style={styles.addButtonText}>Take Photo</Text>
+            </>
+          )}
         </Pressable>
       </ScrollView>
 
       {error && <Text style={styles.errorText}>{error}</Text>}
-
-      <Pressable
-        style={styles.submitButton}
-        onPress={handleSubmit}
-      >
-        <Text style={styles.submitButtonText}>Continue</Text>
-      </Pressable>
     </View>
   );
 }
@@ -153,16 +160,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
   },
-  submitButton: {
-    backgroundColor: '#2563eb',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  submitButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+  disabledButton: {
+    opacity: 0.6,
   },
 });

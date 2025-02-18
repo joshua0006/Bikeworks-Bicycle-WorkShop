@@ -21,9 +21,16 @@ import {
   StyleSheet,
   FlatList,
   Pressable,
+  ActivityIndicator,
+  Modal,
+  TouchableWithoutFeedback,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Bike } from '../../types';
+import { useEffect, useState } from 'react';
+import { collection, query, getDocs } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 interface Props {
   bikes: Bike[];
@@ -31,14 +38,66 @@ interface Props {
   filter?: (bike: Bike) => boolean;
 }
 
-export function BikeList({ bikes, onSelect, filter }: Props) {
-  const filteredBikes = filter ? bikes.filter(filter) : bikes;
+export function BikeList() {
+  const [bikes, setBikes] = useState<Bike[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedBike, setSelectedBike] = useState<Bike | null>(null);
+
+  useEffect(() => {
+    const fetchBikes = async () => {
+      try {
+        const q = query(collection(db, 'bikes'));
+        const querySnapshot = await getDocs(q);
+        const bikesData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Bike[];
+        setBikes(bikesData);
+      } catch (err) {
+        setError('Failed to fetch bikes');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBikes();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
 
   const renderBike = ({ item: bike }: { item: Bike }) => (
     <Pressable
       style={styles.bikeCard}
-      onPress={() => onSelect?.(bike)}
+      onPress={() => setSelectedBike(bike)}
     >
+      <View style={styles.imageContainer}>
+        {bike.photos?.[0] ? (
+          <Image
+            source={{ uri: bike.photos[0] }}
+            style={styles.bikeImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <Ionicons name="bicycle" size={40} color="#94a3b8" />
+        )}
+      </View>
+      
       <View style={styles.bikeInfo}>
         <Text style={styles.serialNumber}>{bike.serialNumber}</Text>
         <Text style={styles.bikeTitle}>
@@ -53,21 +112,58 @@ export function BikeList({ bikes, onSelect, filter }: Props) {
   );
 
   return (
-    <FlatList
-      data={filteredBikes}
-      renderItem={renderBike}
-      keyExtractor={(bike) => bike.serialNumber}
-      contentContainerStyle={styles.list}
-      ListEmptyComponent={
-        <View style={styles.emptyState}>
-          <Ionicons name="bicycle-outline" size={48} color="#94a3b8" />
-          <Text style={styles.emptyStateText}>No bikes found</Text>
-          <Text style={styles.emptyStateSubtext}>
-            Try adjusting your search or add a new bike
-          </Text>
-        </View>
-      }
-    />
+    <>
+      <FlatList
+        data={bikes}
+        renderItem={renderBike}
+        keyExtractor={(bike) => bike.id}
+        contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="bicycle-outline" size={48} color="#94a3b8" />
+            <Text style={styles.emptyStateText}>No bikes found</Text>
+            <Text style={styles.emptyStateSubtext}>
+              Try adjusting your search or add a new bike
+            </Text>
+          </View>
+        }
+      />
+      
+      <Modal
+        visible={!!selectedBike}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedBike(null)}
+      >
+        <TouchableWithoutFeedback onPress={() => setSelectedBike(null)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                {selectedBike && (
+                  <>
+                    <Text style={styles.modalTitle}>Bike Details</Text>
+                    <Text>Serial: {selectedBike.serialNumber}</Text>
+                    <Text>Brand: {selectedBike.brand}</Text>
+                    <Text>Model: {selectedBike.model}</Text>
+                    <Text>Year: {selectedBike.year}</Text>
+                    <Text>Color: {selectedBike.color}</Text>
+                    <Text>Size: {selectedBike.size}</Text>
+                    <Text>Status: {selectedBike.status}</Text>
+                    
+                    <Pressable
+                      style={styles.closeButton}
+                      onPress={() => setSelectedBike(null)}
+                    >
+                      <Text style={styles.closeButtonText}>Close</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+    </>
   );
 }
 
@@ -84,6 +180,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+  },
+  imageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    overflow: 'hidden',
+  },
+  bikeImage: {
+    width: '100%',
+    height: '100%',
   },
   bikeInfo: {
     flex: 1,
@@ -117,5 +227,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#94a3b8',
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 16
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 8,
+    width: '80%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  closeButton: {
+    marginTop: 15,
+    backgroundColor: '#2563eb',
+    padding: 10,
+    borderRadius: 5,
+    alignSelf: 'flex-end',
+  },
+  closeButtonText: {
+    color: 'white',
+    fontWeight: '600',
   },
 });

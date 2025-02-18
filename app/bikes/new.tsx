@@ -20,15 +20,18 @@ import { View, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { BikeForm } from '../../components/bikes/BikeForm';
 import type { Bike } from '../../types';
+import { addDoc, collection } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 export default function NewBikeScreen() {
   const handleSubmit = async (bikeData: Bike) => {
     try {
-      // TODO: Implement Firebase storage
-      // await saveBike(bikeData);
+      const docRef = await addDoc(collection(db, 'bikes'), bikeData);
+      console.log('Bike added with ID: ', docRef.id);
       router.replace('/bikes');
     } catch (error) {
       console.error('Failed to save bike:', error);
+      alert('Failed to save bike. Please try again.');
     }
   };
 
