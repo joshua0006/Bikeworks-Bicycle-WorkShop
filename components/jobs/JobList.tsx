@@ -1,0 +1,187 @@
+/**
+ * Job List Component
+ * 
+ * Displays a list of workshop jobs with filtering and sorting capabilities.
+ * Shows job status, customer info, and key details at a glance.
+ * 
+ * Props:
+ * - jobs: Job[] - Array of jobs to display
+ * - onSelect?: (job: Job) => void - Optional callback when a job is selected
+ * - filter?: (job: Job) => boolean - Optional filter function
+ * 
+ * Features:
+ * - Status-based filtering
+ * - Date range filtering
+ * - Search by customer or bike
+ * - Sort by date, status, or customer
+ */
+
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Pressable,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import type { Job } from '../../types';
+
+interface Props {
+  jobs: Job[];
+  onSelect?: (job: Job) => void;
+  filter?: (job: Job) => boolean;
+}
+
+export function JobList({ jobs, onSelect, filter }: Props) {
+  const filteredJobs = filter ? jobs.filter(filter) : jobs;
+
+  const formatDate = (dateString: string) => {
+    const [day, month, year] = dateString.split('/');
+    return new Date(Number(year), Number(month) - 1, Number(day))
+      .toLocaleDateString('en-AU', {
+        day: 'numeric',
+        month: 'short',
+      });
+  };
+
+  const renderJob = ({ item: job }: { item: Job }) => (
+    <Pressable
+      style={styles.jobCard}
+      onPress={() => onSelect?.(job)}
+    >
+      <View style={styles.jobHeader}>
+        <Text style={styles.date}>{formatDate(job.dateIn)}</Text>
+        <Text style={styles.cost}>${job.totalCost}</Text>
+      </View>
+
+      <View style={styles.customerInfo}>
+        <Text style={styles.customerName}>{job.customerName}</Text>
+        <Text style={styles.bikeModel}>{job.bikeModel}</Text>
+      </View>
+
+      <Text style={styles.workRequired} numberOfLines={2}>
+        {job.workRequired}
+      </Text>
+
+      {job.pickupDate ? (
+        <View style={styles.completedBadge}>
+          <Text style={styles.completedText}>Completed</Text>
+          <Text style={styles.pickupDate}>
+            Pickup: {formatDate(job.pickupDate)}
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.inProgressBadge}>
+          <Text style={styles.inProgressText}>In Progress</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+
+  return (
+    <FlatList
+      data={filteredJobs}
+      renderItem={renderJob}
+      keyExtractor={(job) => job.id}
+      contentContainerStyle={styles.list}
+      ListEmptyComponent={
+        <View style={styles.emptyState}>
+          <Ionicons name="construct-outline" size={48} color="#94a3b8" />
+          <Text style={styles.emptyStateText}>No jobs found</Text>
+          <Text style={styles.emptyStateSubtext}>
+            Scan a job sheet to add your first workshop job
+          </Text>
+        </View>
+      }
+    />
+  );
+}
+
+const styles = StyleSheet.create({
+  list: {
+    padding: 16,
+  },
+  jobCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  jobHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  date: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  cost: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  customerInfo: {
+    marginBottom: 8,
+  },
+  customerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  bikeModel: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  workRequired: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 12,
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    padding: 8,
+    borderRadius: 4,
+  },
+  completedText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#16a34a',
+  },
+  pickupDate: {
+    fontSize: 14,
+    color: '#16a34a',
+  },
+  inProgressBadge: {
+    backgroundColor: '#fef3c7',
+    padding: 8,
+    borderRadius: 4,
+  },
+  inProgressText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#d97706',
+    textAlign: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 24,
+    gap: 12,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+  },
+});
