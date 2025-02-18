@@ -167,6 +167,42 @@ export function BikeList() {
   );
 }
 
+function BikeCard({ bike }: { bike: Bike }) {
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.brandModel}>{bike.brand} {bike.model}</Text>
+        <Text style={styles.serial}>#{bike.serialNumber}</Text>
+      </View>
+      
+      <View style={styles.detailsContainer}>
+        <View style={styles.detailItem}>
+          <Ionicons name="calendar" size={16} color="#64748b" />
+          <Text style={styles.detailText}>{bike.year || 'N/A'}</Text>
+        </View>
+        
+        <View style={styles.detailItem}>
+          <Ionicons name="color-palette" size={16} color="#64748b" />
+          <Text style={styles.detailText}>{bike.color || 'N/A'}</Text>
+        </View>
+        
+        <View style={styles.detailItem}>
+          <Ionicons name="resize" size={16} color="#64748b" />
+          <Text style={styles.detailText}>{bike.size || 'N/A'}</Text>
+        </View>
+      </View>
+
+      {bike.photos?.[0] && (
+        <Image 
+          source={{ uri: bike.photos[0] }} 
+          style={styles.bikeImage} 
+          resizeMode="cover"
+        />
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   list: {
     padding: 16,
@@ -270,5 +306,50 @@ const styles = StyleSheet.create({
   closeButtonText: {
     color: 'white',
     fontWeight: '600',
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  brandModel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  serial: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  detailsContainer: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 12,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  bikeImage: {
+    width: '100%',
+    height: 150,
+    borderRadius: 8,
+    marginTop: 8,
   },
 });

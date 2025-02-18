@@ -14,16 +14,20 @@
  * - Brand/model suggestions
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
-  ScrollView,
+  FlatList,
   Pressable,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 import type { Bike } from '../../types';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Props {
   initialData?: Partial<Bike>;
@@ -31,176 +35,198 @@ interface Props {
 }
 
 export function BikeDetailsForm({ initialData = {}, onSubmit }: Props) {
-  const [formData, setFormData] = useState<Partial<Bike>>({
-    serialNumber: '',
-    type: '',
-    brand: '',
-    year: new Date().getFullYear(),
-    size: '',
-    model: '',
-    color: '',
-    ...initialData,
-  });
+  const [bikes, setBikes] = useState<Bike[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedBike, setSelectedBike] = useState<Bike | null>(null);
 
-  const [errors, setErrors] = useState<Partial<Record<keyof Bike, string>>>({});
+  useEffect(() => {
+    const fetchBikes = async () => {
+      try {
+        console.log('Fetching bikes from Firestore...');
+        const q = query(collection(db, 'bikes'));
+        const querySnapshot = await getDocs(q);
+        console.log('Bikes snapshot:', querySnapshot.docs.length);
+        
+        const bikesData = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          console.log('Bike document:', doc.id, data);
+          return {
+            id: doc.id,
+            serialNumber: data.serialNumber,
+            brand: data.brand,
+            model: data.model,
+            year: data.year,
+            color: data.color,
+            photos: data.photos || [],
+            status: data.status || 'available',
+            // Add other necessary fields
+          } as Bike;
+        });
+        
+        setBikes(bikesData);
+      } catch (err) {
+        console.error('Bike fetch error:', err);
+        setError('Failed to load bikes');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBikes();
+  }, []);
 
-  const validate = (): boolean => {
-    const newErrors: Partial<Record<keyof Bike, string>> = {};
+  const renderBikeItem = ({ item }: { item: Bike }) => (
+    <Pressable
+      style={[
+        styles.bikeCard,
+        selectedBike?.id === item.id && styles.selectedCard
+      ]}
+      onPress={() => {
+        console.log('Selected bike:', item);
+        setSelectedBike(item);
+        onSubmit(item);
+      }}
+    >
+      <View style={styles.imageContainer}>
+        {item.photos?.[0] ? (
+          <Image
+            source={{ uri: item.photos[0] }}
+            style={styles.bikeImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <Ionicons name="bicycle" size={40} color="#94a3b8" />
+        )}
+      </View>
+      
+      <View style={styles.bikeInfo}>
+        <Text style={styles.serialNumber}>{item.serialNumber}</Text>
+        <Text style={styles.bikeTitle}>
+          {item.year} {item.brand} {item.model}
+        </Text>
+        <Text style={styles.bikeDetails}>
+          {item.type} • {item.size} • {item.color}
+        </Text>
+      </View>
+    </Pressable>
+  );
 
-    if (!formData.serialNumber) {
-      newErrors.serialNumber = 'Serial number is required';
-    }
-    if (!formData.brand) {
-      newErrors.brand = 'Brand is required';
-    }
-    if (!formData.model) {
-      newErrors.model = 'Model is required';
-    }
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" />
+        <Text>Loading available bikes...</Text>
+      </View>
+    );
+  }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = () => {
-    if (validate()) {
-      onSubmit(formData as Bike);
-    }
-  };
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.field}>
-        <Text style={styles.label}>Serial Number</Text>
-        <TextInput
-          style={[styles.input, errors.serialNumber && styles.inputError]}
-          value={formData.serialNumber}
-          onChangeText={(text) =>
-            setFormData((prev) => ({ ...prev, serialNumber: text }))
-          }
-          placeholder="Enter bike serial number"
-        />
-        {errors.serialNumber && (
-          <Text style={styles.errorText}>{errors.serialNumber}</Text>
-        )}
-      </View>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Brand</Text>
-        <TextInput
-          style={[styles.input, errors.brand && styles.inputError]}
-          value={formData.brand}
-          onChangeText={(text) =>
-            setFormData((prev) => ({ ...prev, brand: text }))
-          }
-          placeholder="Enter bike brand"
-        />
-        {errors.brand && (
-          <Text style={styles.errorText}>{errors.brand}</Text>
-        )}
-      </View>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Model</Text>
-        <TextInput
-          style={[styles.input, errors.model && styles.inputError]}
-          value={formData.model}
-          onChangeText={(text) =>
-            setFormData((prev) => ({ ...prev, model: text }))
-          }
-          placeholder="Enter bike model"
-        />
-        {errors.model && (
-          <Text style={styles.errorText}>{errors.model}</Text>
-        )}
-      </View>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Year</Text>
-        <TextInput
-          style={styles.input}
-          value={formData.year?.toString()}
-          onChangeText={(text) =>
-            setFormData((prev) => ({ ...prev, year: parseInt(text) || 0 }))
-          }
-          keyboardType="numeric"
-          placeholder="Enter bike year"
-        />
-      </View>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Size</Text>
-        <TextInput
-          style={styles.input}
-          value={formData.size}
-          onChangeText={(text) =>
-            setFormData((prev) => ({ ...prev, size: text }))
-          }
-          placeholder="Enter bike size"
-        />
-      </View>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Color</Text>
-        <TextInput
-          style={styles.input}
-          value={formData.color}
-          onChangeText={(text) =>
-            setFormData((prev) => ({ ...prev, color: text }))
-          }
-          placeholder="Enter bike color"
-        />
-      </View>
-
-      <Pressable
-        style={styles.submitButton}
-        onPress={handleSubmit}
-      >
-        <Text style={styles.submitButtonText}>Continue</Text>
-      </Pressable>
-    </ScrollView>
+    <View style={styles.container}>
+      <Text style={styles.title}>Select a Bike</Text>
+      
+      <FlatList
+        data={bikes}
+        renderItem={renderBikeItem}
+        keyExtractor={(item) => item.id!}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="bicycle-outline" size={48} color="#94a3b8" />
+            <Text style={styles.emptyStateText}>No bikes available</Text>
+          </View>
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 16,
   },
-  field: {
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#dc2626',
+    marginTop: 16,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '600',
     marginBottom: 16,
+    paddingHorizontal: 16,
   },
-  label: {
+  listContent: {
+    paddingBottom: 16,
+  },
+  bikeCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  selectedCard: {
+    borderColor: '#2563eb',
+    backgroundColor: '#f0f9ff',
+  },
+  imageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 16,
+    overflow: 'hidden',
+  },
+  bikeImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bikeInfo: {
+    flex: 1,
+  },
+  serialNumber: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  bikeTitle: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#1e293b',
     marginBottom: 8,
   },
-  input: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#1e293b',
-  },
-  inputError: {
-    borderColor: '#ef4444',
-  },
-  errorText: {
-    color: '#ef4444',
+  bikeDetails: {
     fontSize: 14,
-    marginTop: 4,
+    color: '#64748b',
   },
-  submitButton: {
-    backgroundColor: '#2563eb',
-    padding: 16,
-    borderRadius: 8,
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
   },
-  submitButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+  emptyStateText: {
+    color: '#64748b',
+    marginTop: 16,
   },
 });
