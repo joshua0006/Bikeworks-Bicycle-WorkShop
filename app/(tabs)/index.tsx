@@ -1,12 +1,13 @@
-import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { RecentSales } from '../../components/sales/RecentSales';
 
-export default function SalesScreen() {
+export default function IndexScreen() {
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Recent Sales</Text>
+        <Text style={styles.title}>Dashboard</Text>
         <Link href="/sales/new" asChild>
           <Pressable style={styles.addButton}>
             <Ionicons name="add" size={24} color="#ffffff" />
@@ -14,20 +15,12 @@ export default function SalesScreen() {
           </Pressable>
         </Link>
       </View>
-      <FlatList
-        data={[]}
-        renderItem={() => null}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="cart-outline" size={48} color="#94a3b8" />
-            <Text style={styles.emptyStateText}>No sales recorded yet</Text>
-            <Text style={styles.emptyStateSubtext}>
-              Add your first sale by clicking the New Sale button
-            </Text>
-          </View>
-        }
-      />
-    </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Recent Sales</Text>
+        <RecentSales />
+      </View>
+    </ScrollView>
   );
 }
 
@@ -63,21 +56,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '600',
   },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    gap: 12,
+  section: {
+    padding: 16,
   },
-  emptyStateText: {
-    fontSize: 18,
+  sectionTitle: {
+    fontSize: 20,
     fontWeight: '600',
-    color: '#64748b',
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: '#94a3b8',
-    textAlign: 'center',
+    color: '#1e293b',
+    marginBottom: 16,
   },
 });

@@ -30,6 +30,8 @@ import { BikeSelector } from './BikeSelector';
 import type { Client, Bike } from '../../types';
 import { collection, getDocs, query, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { useRouter } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 interface Props {
   initialData?: Client;
@@ -49,6 +51,8 @@ export function ClientForm({ initialData = {}, onSubmit }: Props) {
   const [allBikes, setAllBikes] = useState<Bike[]>([]);
   const [loading, setLoading] = useState(false);
   const [formValid, setFormValid] = useState(true);
+
+  const router = useRouter();
 
   useEffect(() => {
     const fetchBikes = async () => {
@@ -112,7 +116,16 @@ export function ClientForm({ initialData = {}, onSubmit }: Props) {
   };
 
   return (
+    <><Pressable 
+        style={[styles.backButton, { backgroundColor: '#f1f5f9' }]}
+        onPress={() => router.push('/clients')}
+      >
+        <Ionicons name="arrow-back" size={20} color="#64748b" />
+        <Text style={styles.backButtonText}>Back to Clients</Text>
+      </Pressable>
     <ScrollView style={styles.container}>
+      
+
       <View style={styles.field}>
         <Text style={styles.label}>Name</Text>
         <TextInput
@@ -181,6 +194,7 @@ export function ClientForm({ initialData = {}, onSubmit }: Props) {
         )}
       </Pressable>
     </ScrollView>
+    </>
   );
 }
 
@@ -258,5 +272,18 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.6,
     backgroundColor: '#94a3b8',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 20,
+    marginBottom: 16,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });

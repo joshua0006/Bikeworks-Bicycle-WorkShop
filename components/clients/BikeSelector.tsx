@@ -24,6 +24,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { db } from '../../lib/firebase';
+import { collection, getDocs, query } from 'firebase/firestore';
 
 interface Props {
   selectedBikes: string[];
@@ -31,21 +34,27 @@ interface Props {
 }
 
 export function BikeSelector({ selectedBikes = [], onChange }: Props) {
-  const removeBike = (serialNumber: string) => {
-    onChange(selectedBikes.filter(bike => bike !== serialNumber));
-  };
+  const [availableBikes, setAvailableBikes] = useState<Bike[]>([]);
 
-  const renderBike = ({ item: serialNumber }: { item: string }) => (
-    <View style={styles.bikeItem}>
-      <Text style={styles.serialNumber}>{serialNumber}</Text>
-      <Pressable
-        style={styles.removeButton}
-        onPress={() => removeBike(serialNumber)}
-      >
-        <Ionicons name="close-circle" size={24} color="#ef4444" />
-      </Pressable>
-    </View>
-  );
+  useFocusEffect(() => {
+    const fetchBikes = async () => {
+      const q = query(collection(db, 'bikes'));
+      const snapshot = await getDocs(q);
+      const bikesData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Bike[];
+      setAvailableBikes(bikesData);
+    };
+    fetchBikes();
+  });
+
+  const toggleBike = (serialNumber: string) => {
+    const newSelection = selectedBikes.includes(serialNumber)
+      ? selectedBikes.filter(sn => sn !== serialNumber)
+      : [...selectedBikes, serialNumber];
+    onChange(newSelection);
+  };
 
   return (
     <View style={styles.container}>
@@ -60,16 +69,21 @@ export function BikeSelector({ selectedBikes = [], onChange }: Props) {
       </View>
 
       <FlatList
-        data={selectedBikes}
-        renderItem={renderBike}
-        keyExtractor={(item) => item}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>
-              No bikes associated with this client
+        data={availableBikes}
+        renderItem={({ item }) => (
+          <Pressable
+            style={[
+              styles.bikeItem,
+              selectedBikes.includes(item.serialNumber) && styles.selectedBike
+            ]}
+            onPress={() => toggleBike(item.serialNumber)}
+          >
+            <Text style={styles.bikeText}>
+              {item.brand} {item.model} ({item.serialNumber})
             </Text>
-          </View>
-        }
+          </Pressable>
+        )}
+        keyExtractor={(item) => item.serialNumber}
       />
     </View>
   );
@@ -111,23 +125,12 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
   },
-  serialNumber: {
+  selectedBike: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#2563eb',
+  },
+  bikeText: {
     fontSize: 16,
     color: '#1e293b',
-  },
-  removeButton: {
-    padding: 4,
-  },
-  emptyState: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-  },
-  emptyStateText: {
-    color: '#64748b',
-    fontSize: 14,
   },
 });

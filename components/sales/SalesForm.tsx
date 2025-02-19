@@ -16,13 +16,15 @@ import { ClientSelector } from './ClientSelector';
 import { BikeDetailsForm } from './BikeDetailsForm';
 import { SaleDetailsForm } from './SaleDetailsForm';
 import { SaleReview } from './SaleReview';
+import { PhotoMatcher } from './PhotoMatcher';
 import { PhotoUpload } from './PhotoUpload';
-import type { Bike, Client, Sale } from '../../types';
+import type { Bike, Client, Sale, Purchase } from '../../types';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
-type FormStep = 'select' | 'details' | 'review';
+type FormStep = 'bike-details' | 'photo-upload' | 'sale-details' | 'review';
 
 export function SalesForm() {
-  const [step, setStep] = useState<FormStep>('select');
+  const [step, setStep] = useState<FormStep>('bike-details');
   const [loading, setLoading] = useState(true);
   const [availableBikes, setAvailableBikes] = useState<Bike[]>([]);
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
@@ -30,8 +32,12 @@ export function SalesForm() {
     isNewBike: false,
     photos: [],
     saleDate: new Date().toISOString(),
-    status: 'completed'
+    status: 'completed',
+    bikeDetails: {},
+    clientDetails: {}
   });
+
+  const steps: FormStep[] = ['bike-details', 'photo-upload', 'sale-details', 'review'];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,7 +66,7 @@ export function SalesForm() {
     fetchData();
   }, []);
 
-  const handleBikeSelect = (bike: Bike) => {
+  const handleBikeSubmit = (bike: Bike) => {
     setFormData(prev => ({
       ...prev,
       bikeId: bike.id,
@@ -70,19 +76,13 @@ export function SalesForm() {
       year: bike.year,
       color: bike.color,
       type: bike.type,
-      size: bike.size,
-      photos: bike.photos || [],
-      price: bike.suggestedPrice || bike.purchasePrice || 0
+      size: bike.size
     }));
-    setStep('details');
+    setStep('photo-upload');
   };
 
-  const handleManualEntry = () => {
-    setFormData(prev => ({
-      ...prev,
-      isNewBike: true
-    }));
-    setStep('details');
+  const handlePhotoUpload = (photos: string[]) => {
+    setFormData(prev => ({ ...prev, photos }));
   };
 
   const handleClientSelect = (client: Client) => {
@@ -95,46 +95,97 @@ export function SalesForm() {
     }));
   };
 
-  const handleDetailsSubmit = (details: Partial<Sale>) => {
-    setFormData(prev => ({
-      ...prev,
-      ...details
-    }));
-    setStep('review');
-  };
-
   const handleSubmit = async () => {
     try {
-      if (!formData.serialNumber || !formData.brand || !formData.price) {
-        Alert.alert('Error', 'Please fill in all required fields');
+      console.log('Starting purchase submission...');
+
+      // Basic validation
+      if (!formData.bikeId || !formData.clientId) {
+        Alert.alert('Error', 'Missing bike or client information');
         return;
       }
 
-      const saleData = {
-        ...formData,
+      // Prepare purchase document with required fields
+      const purchaseData = {
+        // Required fields
+        bikeId: formData.bikeId,
+        clientId: formData.clientId,
+        status: 'completed' as const,
+        saleDate: new Date().toISOString(),
+        
+        // Bike details
+        brand: formData.brand || '',
+        model: formData.model || '',
+        serialNumber: formData.serialNumber || '',
+        year: formData.year || 0,
+        color: formData.color || '',
+        type: formData.type || '',
+        size: formData.size || '',
+        
+        // Client details
+        clientName: formData.clientName || '',
+        clientEmail: formData.clientEmail || '',
+        clientPhone: formData.clientPhone || '',
+        
+        // Sale details
+        price: Number(formData.price) || 0,
+        paymentMethod: formData.paymentMethod || 'cash',
+        
+        // Documentation
+        photos: formData.photos || [],
+        
+        // Metadata
         createdAt: new Date().toISOString(),
-        status: 'completed'
+        updatedAt: new Date().toISOString()
       };
 
-      const saleRef = await addDoc(collection(db, 'sales'), saleData);
+      console.log('Submitting purchase data:', purchaseData);
 
-      if (formData.bikeId) {
+      try {
+        // Add to purchases collection
+        const purchaseRef = await addDoc(collection(db, 'purchases'), purchaseData);
+        console.log('Purchase document created with ID:', purchaseRef.id);
+
+        // Update bike status
         await updateDoc(doc(db, 'bikes', formData.bikeId), {
-          sold: true,
-          saleId: saleRef.id,
-          saleDate: saleData.saleDate,
-          salePrice: saleData.price,
-          clientId: formData.clientId,
-          lastUpdated: new Date().toISOString()
+          status: 'sold',
+          saleId: purchaseRef.id,
+          updatedAt: new Date().toISOString()
         });
+        console.log('Bike status updated');
+
+        // Show success message and redirect
+        Alert.alert(
+          'Success',
+          'Purchase saved successfully',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('Redirecting to sales list');
+                router.replace('/');
+              }
+            }
+          ]
+        );
+      } catch (firestoreError) {
+        console.error('Firestore error:', firestoreError);
+        Alert.alert('Database Error', 'Failed to save purchase. Please try again.');
       }
 
-      Alert.alert('Success', 'Sale recorded successfully', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
     } catch (error) {
-      console.error('Sale submission error:', error);
-      Alert.alert('Error', 'Failed to record sale');
+      console.error('Submission error:', error);
+      Alert.alert(
+        'Error',
+        'Failed to process purchase. Please check all fields and try again.'
+      );
+    }
+  };
+
+  const handleBack = () => {
+    const currentIndex = steps.indexOf(step);
+    if (currentIndex > 0) {
+      setStep(steps[currentIndex - 1]);
     }
   };
 
@@ -147,56 +198,68 @@ export function SalesForm() {
   }
 
   return (
+    <><Pressable
+    style={styles.exitButton}
+    onPress={() => router.push('/')}
+  >
+    <Ionicons name="arrow-back" size={20} color="#64748b" />
+    <Text style={styles.exitButtonText}>New Sale</Text>
+  </Pressable>
     <ScrollView style={styles.container}>
-      {step === 'select' && (
-        <>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Select Bike</Text>
-            <BikeSelector
-              bikes={availableBikes}
-              onSelect={handleBikeSelect}
-            />
-            <Pressable
-              style={styles.manualButton}
-              onPress={handleManualEntry}
-            >
-              <Text style={styles.manualButtonText}>Enter Manually</Text>
-            </Pressable>
-          </View>
-        </>
+      <View style={styles.navigationContainer}>
+        
+
+        {steps.indexOf(step) > 0 && (
+          <Pressable
+            style={styles.backButton}
+            onPress={handleBack}
+          >
+            <Ionicons name="arrow-back" size={16} color="#3b82f6" />
+            <Text style={styles.backButtonText}>Back</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {step === 'bike-details' && (
+        <BikeDetailsForm
+          initialData={formData}
+          onSubmit={handleBikeSubmit}
+          showManualEntry={true}
+        />
       )}
 
-      {step === 'details' && (
-        <>
-          {formData.isNewBike ? (
-            <BikeDetailsForm
-              initialData={formData}
-              onSubmit={handleDetailsSubmit}
-            />
-          ) : (
-            <SaleDetailsForm
-              initialData={formData}
-              onSubmit={handleDetailsSubmit}
-            />
-          )}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Select Client</Text>
-            <ClientSelector
-              clients={availableClients}
-              onSelect={handleClientSelect}
-              selectedClientId={formData.clientId}
-            />
-          </View>
-        </>
+      {step === 'photo-upload' && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Sale Documentation</Text>
+          <PhotoUpload 
+            photos={formData.photos || []}
+            onSubmit={handlePhotoUpload}
+            onNext={() => setStep('sale-details')}
+          />
+        </View>
+      )}
+
+      {step === 'sale-details' && (
+        <SaleDetailsForm
+          initialData={formData}
+          onSubmit={(details) => {
+            setFormData(prev => ({ ...prev, ...details }));
+            setStep('review');
+          }}
+        />
       )}
 
       {step === 'review' && (
         <SaleReview
           data={formData as Sale}
-          onSubmit={handleSubmit}
+          onSubmit={() => {
+            console.log('SaleReview onSubmit triggered');
+            handleSubmit();
+          }}
         />
       )}
     </ScrollView>
+    </>
   );
 }
 
@@ -232,5 +295,37 @@ const styles = StyleSheet.create({
     color: '#2563eb',
     fontSize: 16,
     fontWeight: '500',
-  }
+  },
+  navigationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    gap: 16,
+  },
+  exitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    padding: 8,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+  },
+  exitButtonText: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    padding: 8,
+  },
+  backButtonText: {
+    color: '#3b82f6',
+    fontSize: 14,
+    fontWeight: '500',
+  },
 }); 

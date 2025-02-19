@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
-import type { BusinessSettings } from '../types';
+import type { BusinessSettings } from '../../types';
 
 export default function TabLayout() {
   const { primary, colors } = useTheme();
@@ -32,48 +32,36 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Bike Sales',
-          tabBarIcon: ({ size, color }) => (
-            <Ionicons name="cart" size={size} color={color} />
-          ),
-          href: features.sales ? undefined : null,
+          title: 'Sales',
+          tabBarIcon: ({ color }) => <Ionicons name="cart" color={color} size={24} />
         }}
       />
       <Tabs.Screen
         name="bikes"
         options={{
           title: 'Bikes',
-          tabBarIcon: ({ size, color }) => (
-            <Ionicons name="bicycle" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <Ionicons name="bicycle" color={color} size={24} />
         }}
       />
       <Tabs.Screen
         name="jobs"
         options={{
           title: 'Jobs',
-          tabBarIcon: ({ size, color }) => (
-            <Ionicons name="construct" size={size} color={color} />
-          ),
-          href: features.jobs ? undefined : null,
+          tabBarIcon: ({ color }) => <Ionicons name="construct" color={color} size={24} />
         }}
       />
       <Tabs.Screen
         name="clients"
         options={{
           title: 'Clients',
-          tabBarIcon: ({ size, color }) => (
-            <Ionicons name="people" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <Ionicons name="people" color={color} size={24} />
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ size, color }) => (
-            <Ionicons name="settings" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <Ionicons name="settings" color={color} size={24} />
         }}
       />
     </Tabs>

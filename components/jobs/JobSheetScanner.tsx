@@ -26,6 +26,10 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import type { Job } from '../../types';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { parseJobSheetText } from '../../utils/parseJobSheet';
+import { createWorker } from 'tesseract.js';
 
 interface Props {
   onComplete: (data: Partial<Job>) => void;
@@ -59,27 +63,41 @@ export function JobSheetScanner({ onComplete }: Props) {
     setError(null);
 
     try {
-      // TODO: Implement Google Cloud Vision processing
-      // For now, return mock data based on the example job sheet
-      const mockData: Partial<Job> = {
-        customerName: 'John Jerrime',
-        customerPhone: '0411056876',
-        bikeModel: 'Trek Marlin 7',
-        dateIn: '14/6/2023',
-        workRequired: 'Fork service - check over bike',
-        workDone: 'Fork Service\nHub clean\nTighten head set\nAdjusted gears\nChecked brakes/pads',
-        laborCost: 80,
-        partsCost: 210,
-        totalCost: 290,
-        notes: 'S/T 27/6/2023',
+      const worker = await createWorker('eng', 1, {
+        logger: m => console.log(m),
+        cachePath: '.traineddata/',
+        errorHandler: err => {
+          throw new Error(`OCR Error: ${err.message}`);
+        }
+      });
+      
+      const { data: { text } } = await worker.recognize(imageUri);
+      console.log('OCR Raw Text:', text);
+      await worker.terminate();
+
+      const parsedData = parseJobSheetText(text);
+      if (!parsedData.customerName || !parsedData.customerPhone || !parsedData.bikeModel) {
+        throw new Error('Could not extract required fields from job sheet');
+      }
+
+      const jobData = {
+        customerName: parsedData.customerName || 'Unknown Customer',
+        customerPhone: parsedData.customerPhone || 'No Phone',
+        bikeModel: parsedData.bikeModel || 'Unknown Model',
+        workRequired: parsedData.workRequired || 'No work description',
+        workDone: parsedData.workDone || '',
+        laborCost: parsedData.laborCost || 0,
+        partsCost: parsedData.partsCost || 0,
+        totalCost: (parsedData.laborCost || 0) + (parsedData.partsCost || 0),
+        notes: parsedData.notes || '',
+        status: 'pending',
+        createdAt: serverTimestamp()
       };
 
-      // Simulate processing time
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      onComplete(mockData);
+      const docRef = await addDoc(collection(db, 'jobs'), jobData);
+      onComplete({ id: docRef.id, ...jobData });
     } catch (err) {
-      setError('Failed to process job sheet. Please try again or enter details manually.');
+      setError('OCR Processing Failed: ' + err.message);
     } finally {
       setIsProcessing(false);
     }

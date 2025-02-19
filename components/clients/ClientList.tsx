@@ -30,9 +30,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { collection, query, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, getDocs, deleteDoc, doc, updateDoc, writeBatch, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { Client, Bike } from '../../types';
+import { BikeSelector } from './BikeSelector';
+import { Button } from 'react-native';
+import { AddBikeButton } from './AddBikeButton';
 
 export function ClientList() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -76,50 +79,46 @@ export function ClientList() {
     fetchData();
   }, []);
 
-  const handleDelete = async (clientId: string) => {
-    // Show confirmation dialog
-    Alert.alert(
-      "Delete Client",
-      "Are you sure you want to delete this client?",
-      [
-        { text: "Cancel", style: "cancel" }, // 'No' option
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              // 1. Delete from Firebase
-              await deleteDoc(doc(db, 'clients', clientId));
+  const deleteClient = async (clientId: string) => {
+    try {
+      setLoading(true);
+      
+      // 1. Get associated bikes
+      const bikesQuery = query(
+        collection(db, 'bikes'),
+        where('clientId', '==', clientId)
+      );
+      const bikeSnapshots = await getDocs(bikesQuery);
 
-              // 2. Remove client references from bikes
-              const client = clients.find(c => c.id === clientId);
-              if (client) {
-                await Promise.all(
-                  client.bikeSerialNumbers.map(async serialNumber => {
-                    const bike = bikes.find(b => b.serialNumber === serialNumber);
-                    if (bike) {
-                      await updateDoc(doc(db, 'bikes', bike.id), {
-                        clientId: null,
-                        clientName: null
-                      });
-                    }
-                  })
-                );
-              }
+      // 2. Prepare batch
+      const batch = writeBatch(db);
+      
+      // Update bikes to remove client association
+      bikeSnapshots.forEach(bikeDoc => {
+        batch.update(bikeDoc.ref, {
+          clientId: null,
+          clientName: null
+        });
+      });
 
-              // 3. Update UI state
-              setClients(prev => prev.filter(c => c.id !== clientId));
-              setSelectedClient(null);
-              
-              Alert.alert('Success', 'Client deleted successfully');
-            } catch (error) {
-              console.error('Delete error:', error);
-              Alert.alert('Error', 'Failed to delete client');
-            }
-          }
-        }
-      ]
-    );
+      // 3. Delete client document
+      const clientRef = doc(db, 'clients', clientId);
+      batch.delete(clientRef);
+
+      // 4. Execute batch
+      await batch.commit();
+
+      // 5. Update UI state
+      setClients(prev => prev.filter(c => c.id !== clientId));
+      setSelectedClient(null); // Close modal after deletion
+      
+      Alert.alert('Success', 'Client deleted successfully');
+    } catch (error) {
+      console.error('Deletion error:', error);
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEdit = (client: Client) => {
@@ -157,6 +156,13 @@ export function ClientList() {
       }
     }
   }, [clients]);
+
+  useEffect(() => {
+    return () => {
+      setLoading(false);
+      setSelectedClient(null);
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -233,109 +239,141 @@ export function ClientList() {
         <TouchableWithoutFeedback onPress={() => !editMode && setSelectedClient(null)}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>
-                {editMode ? 'Edit Client' : 'Client Details'}
-              </Text>
-              
               {selectedClient && (
                 <>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Name:</Text>
+                  <Text style={styles.modalTitle}>
+                    {editMode ? 'Edit Client' : 'Client Details'}
+                  </Text>
+                  
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Name:</Text>
                     {editMode ? (
                       <TextInput
                         style={styles.editInput}
-                        value={editedData.name || selectedClient.name}
+                        value={editedData.name || selectedClient?.name || ''}
                         onChangeText={(text) => setEditedData(prev => ({ ...prev, name: text }))}
                       />
                     ) : (
-                      <Text style={styles.detailValue}>{selectedClient.name}</Text>
+                      <Text style={styles.fieldValue}>{selectedClient?.name}</Text>
                     )}
                   </View>
                   
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Phone:</Text>
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Phone:</Text>
                     {editMode ? (
                       <TextInput
                         style={styles.editInput}
-                        value={editedData.phone || selectedClient.phone}
+                        value={editedData.phone || selectedClient?.phone || ''}
                         onChangeText={(text) => setEditedData(prev => ({ ...prev, phone: text }))}
                         keyboardType="phone-pad"
                       />
                     ) : (
-                      <Text style={styles.detailValue}>{selectedClient.phone}</Text>
+                      <Text style={styles.fieldValue}>{selectedClient?.phone}</Text>
                     )}
                   </View>
                   
-                  {selectedClient.email && (
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Email:</Text>
-                      <Text style={styles.detailValue}>{selectedClient.email}</Text>
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Email:</Text>
+                    {editMode ? (
+                      <TextInput
+                        style={styles.editInput}
+                        value={editedData.email || selectedClient?.email || ''}
+                        onChangeText={(text) => setEditedData(prev => ({ ...prev, email: text }))}
+                        keyboardType="email-address"
+                      />
+                    ) : (
+                      <Text style={styles.fieldValue}>{selectedClient?.email || 'N/A'}</Text>
+                    )}
+                  </View>
+                  
+                  {editMode && (
+                    <View style={styles.bikeSelectorContainer}>
+                      <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Associated Bikes</Text>
+                        <AddBikeButton clientId={selectedClient?.id} />
+                      </View>
+                      <BikeSelector
+                        selectedBikes={editedData.bikeSerialNumbers || []}
+                        onChange={(serials) => {
+                          setEditedData(prev => ({
+                            ...prev,
+                            bikeSerialNumbers: serials
+                          }));
+                          
+                          // Update Firestore
+                          const updates = serials.map(async serial => {
+                            const bike = bikes.find(b => b.serialNumber === serial);
+                            if (bike) {
+                              await updateDoc(doc(db, 'bikes', bike.id), {
+                                clientId: selectedClient?.id,
+                                clientName: selectedClient?.name
+                              });
+                            }
+                          });
+                        }}
+                      />
                     </View>
                   )}
                   
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Associated Bikes:</Text>
-                    <View style={styles.bikeListContainer}>
-                      {getClientBikes(selectedClient).length === 0 ? (
-                        <Text style={styles.noBikesText}>No associated bikes</Text>
-                      ) : (
-                        getClientBikes(selectedClient).map(bike => (
-                          <View key={bike.id} style={styles.bikeListItem}>
-                            <Ionicons name="bicycle" size={16} color="#64748b" />
-                            <View style={styles.bikeInfo}>
-                              <Text style={styles.bikeModel}>{bike.brand} {bike.model}</Text>
-                              <Text style={styles.bikeSerial}>Serial: {bike.serialNumber}</Text>
-                            </View>
-                          </View>
-                        ))
-                      )}
-                    </View>
-                  </View>
-                  
-                  <View style={styles.modalActions}>
+                  <View style={styles.buttonGroup}>
                     {editMode ? (
                       <>
                         <Pressable
-                          style={[styles.actionButton, styles.deleteButton]}
-                          onPress={() => {
-                            if (selectedClient) {
-                              handleDelete(selectedClient.id);
-                              setEditMode(false);
-                            }
-                          }}
-                        >
-                          <Ionicons name="trash" size={18} color="#ef4444" />
-                          <Text style={styles.actionButtonText}>Delete</Text>
-                        </Pressable>
-                        
-                        <Pressable
-                          style={[styles.actionButton, styles.cancelButton]}
-                          onPress={() => {
-                            setEditMode(false);
-                            setEditedData({});
-                          }}
-                        >
-                          <Text style={styles.actionButtonText}>Cancel</Text>
-                        </Pressable>
-                        
-                        <Pressable
-                          style={[styles.actionButton, styles.saveButton]}
+                          style={[styles.button, styles.saveButton]}
                           onPress={handleSave}
                         >
-                          <Text style={styles.actionButtonText}>Save</Text>
+                          <Text style={styles.buttonText}>Save Changes</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.button, styles.cancelButton]}
+                          onPress={() => setEditMode(false)}
+                        >
+                          <Text style={styles.buttonText}>Cancel</Text>
                         </Pressable>
                       </>
                     ) : (
-                      <Pressable
-                        style={[styles.actionButton, styles.editButton]}
-                        onPress={() => {
-                          setEditMode(true);
-                          setEditedData(selectedClient);
-                        }}
-                      >
-                        <Ionicons name="create" size={18} color="#2563eb" />
-                        <Text style={styles.actionButtonText}>Edit</Text>
-                      </Pressable>
+                      <>
+                        <Pressable
+                          style={[styles.button, styles.editButton]}
+                          onPress={() => {
+                            setEditMode(true);
+                            setEditedData(selectedClient);
+                          }}
+                        >
+                          <Text style={styles.buttonText}>Edit Client</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.button, styles.deleteButton]}
+                          onPress={() => {
+                            if (!selectedClient) return;
+                            
+                            Alert.alert(
+                              'Confirm Delete',
+                              `Permanently delete ${selectedClient.name}?`,
+                              [
+                                { text: 'Cancel', style: 'cancel' },
+                                { 
+                                  text: 'Delete', 
+                                  async onPress() {
+                                    try {
+                                      await deleteClient(selectedClient.id);
+                                    } catch (error) {
+                                      console.error('Deletion failed:', error);
+                                    }
+                                  }
+                                }
+                              ]
+                            );
+                          }}
+                          disabled={loading}
+                        >
+                          {loading ? (
+                            <ActivityIndicator color="#dc2626" />
+                          ) : (
+                            <Text style={styles.buttonText}>Delete Client</Text>
+                          )}
+                        </Pressable>
+                      </>
                     )}
                   </View>
                 </>
@@ -445,9 +483,10 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 16,
+    padding: 24,
     width: '90%',
+    maxWidth: 500,
   },
   modalTitle: {
     fontSize: 20,
@@ -455,50 +494,67 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     marginBottom: 16,
   },
-  detailItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+  fieldGroup: {
+    marginBottom: 16,
   },
-  detailLabel: {
+  fieldLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 8,
+  },
+  fieldValue: {
     fontSize: 16,
     color: '#64748b',
-    fontWeight: '500',
-  },
-  detailValue: {
-    fontSize: 16,
-    color: '#1e293b',
-    fontWeight: '600',
-    maxWidth: '60%',
-    textAlign: 'right',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 20,
-    marginBottom: 16,
-    justifyContent: 'flex-end',
-  },
-  actionButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
   },
   editInput: {
-    flex: 1,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 6,
-    padding: 8,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    padding: 12,
     fontSize: 16,
-    color: '#1e293b',
+    backgroundColor: '#f8fafc',
+  },
+  buttonGroup: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+    flexWrap: 'wrap',
+  },
+  button: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    minWidth: 120,
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  editButton: {
+    backgroundColor: '#2563eb',
   },
   saveButton: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
+    backgroundColor: '#10b981',
   },
   cancelButton: {
-    borderColor: '#64748b',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#64748b',
+  },
+  deleteButton: {
+    backgroundColor: '#ef4444',
+  },
+  bikeSelectorContainer: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 12,
   },
   bikePreview: {
     fontSize: 14,
@@ -533,5 +589,17 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textAlign: 'center',
     marginVertical: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 10,
   },
 });

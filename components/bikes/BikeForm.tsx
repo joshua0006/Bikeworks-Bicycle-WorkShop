@@ -15,7 +15,7 @@
  * - Size standardization
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -26,9 +26,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SerialLookup } from './SerialLookup';
-import { PhotoUpload } from '../sales/PhotoUpload';
+import { PhotoUpload } from './PhotoUpload';
 import type { Bike } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 interface Props {
   initialData?: Partial<Bike>;
@@ -52,6 +54,18 @@ export function BikeForm({ initialData = {}, onSubmit }: Props) {
 
   const [errors, setErrors] = useState<Partial<Record<keyof Bike, string>>>({});
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const clientId = urlParams.get('clientId');
+    if (clientId) {
+      setFormData(prev => ({
+        ...prev,
+        clientId: clientId
+      }));
+    }
+  }, []);
 
   const validate = (): boolean => {
     const newErrors: Partial<Record<keyof Bike, string>> = {};
@@ -88,7 +102,16 @@ export function BikeForm({ initialData = {}, onSubmit }: Props) {
   };
 
   return (
+    <><Pressable 
+    style={[styles.backButton, { backgroundColor: colors.surface }]}
+    onPress={() => router.push('/bikes')}
+  >
+    <Ionicons name="arrow-back" size={20} color={colors.text} />
+    <Text style={[styles.backButtonText, { color: colors.text }]}>New Bike</Text>
+  </Pressable>
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+      
+
       <SerialLookup
         value={formData.serialNumber}
         onChange={(serialNumber) => setFormData(prev => ({ ...prev, serialNumber }))}
@@ -239,6 +262,7 @@ export function BikeForm({ initialData = {}, onSubmit }: Props) {
         )}
       </Pressable>
     </ScrollView>
+    </>
   );
 }
 
@@ -289,5 +313,17 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.6,
     backgroundColor: '#94a3b8',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 20,
+    marginBottom: 16,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
 });

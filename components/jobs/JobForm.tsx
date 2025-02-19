@@ -26,6 +26,8 @@ import {
 } from 'react-native';
 import { CustomerLookup } from './CustomerLookup';
 import type { Job } from '../../types';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 interface Props {
   initialData?: Partial<Job>;
@@ -78,9 +80,26 @@ export function JobForm({ initialData = {}, onSubmit }: Props) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (validate()) {
-      onSubmit(formData as Job);
+      try {
+        const jobData = {
+          ...formData,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          status: 'pending',
+        };
+
+        const docRef = await addDoc(collection(db, 'jobs'), jobData);
+        console.log('Job saved with ID: ', docRef.id);
+        onSubmit(formData as Job);
+      } catch (error) {
+        console.error('Error saving job: ', error);
+        setErrors({
+          ...errors,
+          firebase: 'Failed to save job. Please try again.'
+        });
+      }
     }
   };
 
@@ -184,6 +203,10 @@ export function JobForm({ initialData = {}, onSubmit }: Props) {
           numberOfLines={3}
         />
       </View>
+
+      {errors.firebase && (
+        <Text style={styles.errorText}>{errors.firebase}</Text>
+      )}
 
       <Pressable
         style={styles.submitButton}

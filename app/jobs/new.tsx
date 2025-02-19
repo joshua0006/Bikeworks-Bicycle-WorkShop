@@ -1,69 +1,83 @@
-/**
- * New Job Screen
- * 
- * This screen handles the creation of new workshop jobs through job sheet scanning.
- * It uses AI to extract information from photos of physical job sheets and allows
- * manual editing of the extracted data.
- * 
- * Related components:
- * - JobSheetScanner: Handles photo capture and OCR processing
- * - JobForm: Allows editing of extracted/entered job details
- * - CustomerLookup: Matches or creates customer records
- * 
- * Flow:
- * 1. Scan job sheet or enter details manually
- * 2. Review and edit extracted information
- * 3. Match/create customer record
- * 4. Save job to database
- */
-
-import { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { JobList } from '../../components/jobs/JobList';
+import { db } from '../../lib/firebase';
+import { Job } from '../../types';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { JobSheetScanner } from '../../components/jobs/JobSheetScanner';
-import { JobForm } from '../../components/jobs/JobForm';
-import type { Job } from '../../types';
+export default function JobsPage() {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-type Step = 'scan' | 'review';
+  useEffect(() => {
+    const jobsQuery = query(
+      collection(db, 'jobs'),
+      orderBy('createdAt', 'desc')
+    );
 
-export default function NewJobScreen() {
-  const [currentStep, setCurrentStep] = useState<Step>('scan');
-  const [jobData, setJobData] = useState<Partial<Job>>({});
+    const unsubscribe = onSnapshot(
+      jobsQuery,
+      (snapshot) => {
+        const jobsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Job[];
+        setJobs(jobsData);
+        setLoading(false);
+      },
+      (err) => {
+        setError('Failed to load jobs');
+        console.error(err);
+        setLoading(false);
+      }
+    );
 
-  const handleScanComplete = (extractedData: Partial<Job>) => {
-    setJobData(extractedData);
-    setCurrentStep('review');
-  };
+    return () => unsubscribe();
+  }, []);
 
-  const handleSubmit = async (data: Job) => {
-    try {
-      // TODO: Implement Firebase storage
-      // await saveJob(data);
-      router.replace('/jobs');
-    } catch (error) {
-      console.error('Failed to save job:', error);
-    }
-  };
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {currentStep === 'scan' && (
         <JobSheetScanner onComplete={handleScanComplete} />
-      )}
-      
-      {currentStep === 'review' && (
-        <JobForm
-          initialData={jobData}
-          onSubmit={handleSubmit}
-        />
-      )}
     </View>
   );
 }
 
+const handleScanComplete = (job: Partial<Job>) => {
+  console.log('Job scanned:', job);
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 16,
     backgroundColor: '#f8fafc',
   },
-});
+  title: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 16,
+    textAlign: 'center',
+  }
+}); 

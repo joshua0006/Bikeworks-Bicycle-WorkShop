@@ -1,18 +1,7 @@
 /**
- * Photo Upload Component
+ * Sales Photo Upload Component
  * 
- * Handles photo capture and management for bike sales. Allows multiple photos
- * to be taken and managed. Uses expo-image-picker for camera access.
- * 
- * Props:
- * - photos: string[] - Array of existing photo URIs
- * - onSubmit: (photos: string[]) => void - Called when photos are ready
- * 
- * Features:
- * - Multiple photo capture
- * - Photo preview
- * - Photo deletion
- * - Photo reordering
+ * Handles photo documentation for sales transactions with explicit proof requirements
  */
 
 import { useState } from 'react';
@@ -31,9 +20,10 @@ import { Ionicons } from '@expo/vector-icons';
 interface Props {
   photos: string[];
   onSubmit: (photos: string[]) => void;
+  onNext: () => void;
 }
 
-export function PhotoUpload({ photos: initialPhotos = [], onSubmit }: Props) {
+export function PhotoUpload({ photos: initialPhotos = [], onSubmit, onNext }: Props) {
   const [photos, setPhotos] = useState<string[]>(initialPhotos);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -69,8 +59,12 @@ export function PhotoUpload({ photos: initialPhotos = [], onSubmit }: Props) {
     onSubmit(newPhotos);
   };
 
+  const hasProof = photos.length >= 1;
+
   return (
     <View style={styles.container}>
+      <Text style={styles.sectionTitle}>Proof of Sale Documentation</Text>
+      
       <ScrollView
         horizontal
         style={styles.photoList}
@@ -98,12 +92,30 @@ export function PhotoUpload({ photos: initialPhotos = [], onSubmit }: Props) {
             <ActivityIndicator color="#64748b" />
           ) : (
             <>
-              <Ionicons name="camera" size={32} color="#64748b" />
-              <Text style={styles.addButtonText}>Take Photo</Text>
+              <Ionicons name="camera" size={32} color="#3b82f6" />
+              <Text style={styles.addButtonText}>
+                {photos.length === 0 ? 'Take Proof Photo' : 'Add Another'}
+              </Text>
             </>
           )}
         </Pressable>
       </ScrollView>
+
+      <Text style={styles.helperText}>
+        Required: At least one clear photo showing:
+        {photos.length < 1 && '\n• Sold item\n• Payment receipt\n• Customer signature'}
+      </Text>
+
+      <Pressable
+        style={[styles.nextButton, !hasProof && styles.disabledButton]}
+        onPress={() => {
+          onSubmit(photos); // Final photo state update
+          onNext(); // Explicit step progression
+        }}
+        disabled={!hasProof}
+      >
+        <Text style={styles.nextButtonText}>Continue to Review</Text>
+      </Pressable>
 
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
@@ -113,13 +125,20 @@ export function PhotoUpload({ photos: initialPhotos = [], onSubmit }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 16,
   },
   photoList: {
     flexGrow: 0,
     marginBottom: 16,
   },
   photoListContent: {
-    padding: 16,
+    padding: 8,
     gap: 16,
   },
   photoContainer: {
@@ -149,7 +168,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addButtonText: {
-    color: '#64748b',
+    color: '#3b82f6',
     fontSize: 16,
     fontWeight: '500',
     marginTop: 8,
@@ -162,5 +181,23 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  helperText: {
+    color: '#64748b',
+    fontSize: 14,
+    marginVertical: 12,
+    lineHeight: 20,
+  },
+  nextButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  nextButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

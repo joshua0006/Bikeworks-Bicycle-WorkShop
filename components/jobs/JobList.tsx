@@ -22,9 +22,13 @@ import {
   StyleSheet,
   FlatList,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Job } from '../../types';
+import { useEffect, useState } from 'react';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 interface Props {
   jobs: Job[];
@@ -33,15 +37,69 @@ interface Props {
 }
 
 export function JobList({ jobs, onSelect, filter }: Props) {
-  const filteredJobs = filter ? jobs.filter(filter) : jobs;
+  const [jobsData, setJobsData] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const formatDate = (dateString: string) => {
-    const [day, month, year] = dateString.split('/');
-    return new Date(Number(year), Number(month) - 1, Number(day))
-      .toLocaleDateString('en-AU', {
+  useEffect(() => {
+    const jobsQuery = query(
+      collection(db, 'jobs'),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(
+      jobsQuery,
+      (snapshot) => {
+        const jobsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Job[];
+        setJobsData(filter ? jobsData.filter(filter) : jobsData);
+        setLoading(false);
+      },
+      (err) => {
+        setError('Failed to load jobs');
+        console.error(err);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [filter]);
+
+  if (loading) {
+    return (
+      <View style={styles.emptyState}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.emptyState}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    
+    try {
+      // Handle different date formats
+      const dateParts = dateString.split(/[/-]/);
+      if (dateParts.length !== 3) return dateString;
+
+      const [day, month, year] = dateParts;
+      return new Date(`${year}-${month}-${day}`).toLocaleDateString('en-AU', {
         day: 'numeric',
         month: 'short',
       });
+    } catch (e) {
+      console.error('Invalid date format:', dateString);
+      return dateString;
+    }
   };
 
   const renderJob = ({ item: job }: { item: Job }) => (
@@ -80,7 +138,7 @@ export function JobList({ jobs, onSelect, filter }: Props) {
 
   return (
     <FlatList
-      data={filteredJobs}
+      data={jobsData}
       renderItem={renderJob}
       keyExtractor={(job) => job.id}
       contentContainerStyle={styles.list}
@@ -183,5 +241,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#94a3b8',
     textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#dc2626',
   },
 });
